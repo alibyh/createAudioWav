@@ -1,0 +1,197 @@
+/* Place Names Voice Recorder – styles */
+
+:root {
+    --bg: #0f1419;
+    --surface: #1a2332;
+    --border: #2d3a4d;
+    --text: #e6edf3;
+    --text-muted: #8b9cb3;
+    --accent: #58a6ff;
+    --accent-hover: #79b8ff;
+    --success: #3fb950;
+    --danger: #f85149;
+    --radius: 10px;
+    --font-sans: "DM Sans", system-ui, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    letter-spacing: -0.02em;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.location-section label,
+.controls-section h2 {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.controls-section h2 {
+    margin-top: 0;
+}
+
+#location-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.15s ease;
+}
+
+#location-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#location-input::placeholder {
+    color: var(--text-muted);
+}
+
+.hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0 0 0;
+}
+
+.status-section .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.status-section .status-row:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.status-value {
+    font-weight: 500;
+}
+
+.status-idle {
+    color: var(--text-muted);
+}
+
+.status-recording {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.btn {
+    padding: 0.65rem 1.25rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: 500;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-start {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+.btn-start:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.btn-stop {
+    background: var(--danger);
+    color: #fff;
+}
+
+.btn-stop:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.btn-save {
+    background: var(--success);
+    color: #fff;
+}
+
+.btn-save:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.message {
+    margin: 1rem 0 0 0;
+    font-size: 0.9rem;
+    min-height: 1.4em;
+}
+
+.message.success {
+    color: var(--success);
+}
+
+.message.error {
+    color: var(--danger);
+}
+
+.message.info {
+    color: var(--accent);
+}

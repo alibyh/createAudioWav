@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recording – Place Names Dataset</title>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <!-- Set your backend URL before loading the app (required for GitHub Pages). -->
+    <script>
+        window.API_BASE = "https://YOUR-BACKEND.onrender.com";
+    </script>
+    <div class="container">
+        <header>
+            <h1>Place Names Voice Recorder</h1>
+            <p class="subtitle">Record location names for speech recognition training</p>
+        </header>
+
+        <section class="location-section card">
+            <label for="location-input">Location name</label>
+            <input
+                type="text"
+                id="location-input"
+                placeholder="e.g. Mosque Central, Hospital A, Library West"
+                autocomplete="off"
+            >
+            <p class="hint">Spaces are stored as underscores (e.g. Mosque Central → Mosque_Central)</p>
+        </section>
+
+        <section class="status-section card">
+            <div class="status-row">
+                <span class="status-label">Current location</span>
+                <span id="current-location" class="status-value">—</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Status</span>
+                <span id="recording-status" class="status-value status-idle">Idle</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Recordings for this location</span>
+                <span id="recording-count" class="status-value">0</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Pending (not yet saved)</span>
+                <span id="pending-count" class="status-value">0 / 5</span>
+            </div>
+        </section>
+
+        <section class="controls-section card">
+            <h2>Recording</h2>
+            <p class="hint">Record up to 5 clips (2–5 s each), then Save All.</p>
+            <div class="button-group">
+                <button type="button" id="btn-start" class="btn btn-start">Start Recording</button>
+                <button type="button" id="btn-stop" class="btn btn-stop" disabled>Stop Recording</button>
+                <button type="button" id="btn-save" class="btn btn-save" disabled>Save All</button>
+            </div>
+            <p id="message" class="message" aria-live="polite"></p>
+        </section>
+    </div>
+
+    <script src="static/script.js"></script>
+</body>
+</html>

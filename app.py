@@ -1,10 +1,12 @@
 """
 Flask backend for collecting labeled voice recordings of place names.
 Stores WAV files in dataset/<location_folder>/ and tracks metadata in dataset/metadata.csv.
+Supports CORS for GitHub Pages; optional push to GitHub repo for persistent shared dataset.
 """
 
-import os
+import base64
 import csv
+import os
 from pathlib import Path
 
 from flask import Flask, request, jsonify, render_template
@@ -14,6 +16,11 @@ app = Flask(__name__)
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
 METADATA_PATH = DATASET_DIR / "metadata.csv"
 MAX_UPLOAD_MB = 10
+
+# CORS: allow frontend on GitHub Pages (or any origin) to call this API
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "username/repo-name"
 
 
 def location_to_folder_name(location: str) -> str:
@@ -78,9 +85,156 @@ def append_metadata(filename: str, location: str) -> None:
         writer.writerow([filename, location])
 
 
+def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -> bool:
+    """Create or update a file in the GitHub repo. Returns True on success."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return False
+    try:
+        import urllib.request
+        import json
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
+        b64 = base64.standard_b64encode(content_bytes).decode("ascii")
+        # Check if file exists to get sha for update
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        try:
+            with urllib.request.urlopen(req) as r:
+                existing = json.loads(r.read().decode())
+                sha = existing.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                return False
+            sha = None
+        payload = {"message": message, "content": b64}
+        if sha is not None:
+            payload["sha"] = sha
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data, method="PUT")
+        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req):
+            return True
+    except Exception:
+        return False
+
+
+def get_next_index_github(folder_name: str) -> int:
+    """Get next index by listing dataset/<folder_name>/ in the GitHub repo."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return 1
+    try:
+        import urllib.request
+        import json
+        from urllib.error import HTTPError
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{folder_name}"
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        with urllib.request.urlopen(req) as r:
+            items = json.loads(r.read().decode())
+        indices = []
+        prefix = f"{folder_name}_"
+        for item in items:
+            if item.get("type") != "file":
+                continue
+            name = item.get("name", "")
+            if name.startswith(prefix) and name.endswith(".wav"):
+                try:
+                    num = int(name[len(prefix) : -4])
+                    indices.append(num)
+                except ValueError:
+                    pass
+        return max(indices, default=0) + 1
+    except HTTPError as e:
+        if e.code == 404:
+            return 1
+        return 1
+    except Exception:
+        return 1
+
+
+def push_metadata_line_to_github(filename: str, location: str) -> bool:
+    """Append a line to metadata.csv in the repo (read current content, append, push)."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return False
+    path_in_repo = "dataset/metadata.csv"
+    try:
+        import urllib.request
+        import json
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        try:
+            with urllib.request.urlopen(req) as r:
+                existing = json.loads(r.read().decode())
+                current = base64.standard_b64decode(existing["content"]).decode("utf-8")
+                if not current.endswith("\n"):
+                    current += "\n"
+                new_content = current + f"{filename},{location}\n"
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                new_content = "filename,location\n" + f"{filename},{location}\n"
+            else:
+                return False
+        return push_file_to_github(
+            path_in_repo,
+            new_content.encode("utf-8"),
+            f"Add recording: {filename}",
+        )
+    except Exception:
+        return False
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Allow frontend on GitHub Pages (or other origins) to call the API."""
+    if request.path.startswith("/api/"):
+        response.headers["Access-Control-Allow-Origin"] = CORS_ORIGIN
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+@app.route("/api/upload", methods=["OPTIONS"])
+@app.route("/api/recordings/count", methods=["OPTIONS"])
+def options_cors():
+    return "", 204
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+def get_recording_count_github(folder_name: str) -> int:
+    """Return number of WAV files in dataset/<folder_name>/ from GitHub repo."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return 0
+    try:
+        import urllib.request
+        import json
+        from urllib.error import HTTPError
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{folder_name}"
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        with urllib.request.urlopen(req) as r:
+            items = json.loads(r.read().decode())
+        return sum(1 for i in items if i.get("type") == "file" and (i.get("name") or "").endswith(".wav"))
+    except HTTPError as e:
+        if e.code == 404:
+            return 0
+        return 0
+    except Exception:
+        return 0
 
 
 @app.route("/api/recordings/count", methods=["GET"])
@@ -89,10 +243,11 @@ def get_recording_count():
     folder_name = request.args.get("location_folder", "").strip()
     if not folder_name:
         return jsonify({"count": 0})
-    folder_path = DATASET_DIR / folder_name
-    if not folder_path.is_dir():
-        return jsonify({"count": 0})
-    count = len(list(folder_path.glob("*.wav")))
+    if GITHUB_REPO:
+        count = get_recording_count_github(folder_name)
+    else:
+        folder_path = DATASET_DIR / folder_name
+        count = len(list(folder_path.glob("*.wav"))) if folder_path.is_dir() else 0
     return jsonify({"count": count})
 
 
@@ -126,7 +281,11 @@ def upload_recording():
     folder_path = DATASET_DIR / folder_name
     folder_path.mkdir(parents=True, exist_ok=True)
 
-    next_index = get_next_index(folder_path, folder_name)
+    # When pushing to GitHub, use repo state for next index so we don't overwrite
+    if GITHUB_REPO:
+        next_index = get_next_index_github(folder_name)
+    else:
+        next_index = get_next_index(folder_path, folder_name)
     saved = []
 
     for audio_file in audio_files:
@@ -150,6 +309,17 @@ def upload_recording():
 
         append_metadata(filename, location)
         saved.append(filename)
+
+        if GITHUB_REPO and output_path.exists():
+            with open(output_path, "rb") as f:
+                wav_bytes = f.read()
+            push_file_to_github(
+                f"dataset/{folder_name}/{filename}",
+                wav_bytes,
+                f"Add recording: {filename}",
+            )
+            push_metadata_line_to_github(filename, location)
+
         next_index += 1
 
     return jsonify({
@@ -178,4 +348,6 @@ def check_pydub():
 if __name__ == "__main__":
     check_pydub()
     ensure_dataset_structure()
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", debug=debug, port=port)

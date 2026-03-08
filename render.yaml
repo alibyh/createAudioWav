@@ -1,0 +1,14 @@
+# Render blueprint: deploy the Flask backend so GitHub Pages can call it.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: voice-recorder-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: CORS_ORIGIN
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        sync: false

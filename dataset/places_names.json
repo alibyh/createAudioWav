@@ -1,14 +1,18 @@
 [
     {
-        "name": "كرفور ول أماه"
+        "name": "كرفور ول أماه",
+        "transcribed_name": "كرفور ول أماه"
     },
     {
-        "name": "طب الصنادرة"
+        "name": "طب الصنادرة",
+        "transcribed_name": "طب الصنادرة"
     },
     {
-        "name": "Restaurant petit à petit - مطعم بتي أ بتي"
+        "name": "Restaurant petit à petit - مطعم بتي أ بتي",
+        "transcribed_name": "Restaurant petit à petit - مطعم بتي أ بتي"
     },
     {
-        "name": "مطعم بول - restaurant Paul"
+        "name": "مطعم بول - restaurant Paul",
+        "transcribed_name": "مطعم بول - restaurant Paul"
     }
 ]

@@ -89,16 +89,27 @@ Anyone visiting that URL can record and click **Save All**; recordings go to you
 
 1. **Choose a place** from the dropdown (list comes from `dataset/places_names.json`). Only you (the repo owner) edit that file so place names stay consistent.
 2. Click **Start Recording**, speak the place name (about 2–5 seconds), then **Stop Recording**. You can record up to 5 clips.
-3. Click **Save All** to upload. Files are converted to WAV and saved as `dataset/<Location>_<NNN>.wav` and appended to `dataset/metadata.csv`.
+3. Click **Save All** to upload. Files are converted to WAV and saved as `dataset/<Location>_<NNN>.wav` and appended to `dataset/metadata.csv` (with a transcription column from the place list).
+
+### Audio format
+
+All saved recordings are normalized to:
+
+- **Format:** WAV (`.wav`)
+- **Sample rate:** 16000 Hz
+- **Channels:** mono
+- **Bit depth:** 16-bit PCM
+
+The backend converts browser uploads (e.g. WebM) to this format before saving.
 
 ### Place list (`dataset/places_names.json`)
 
-JSON array of objects with a `"name"` field. Example:
+JSON array of objects with `"name"` (display + folder name) and `"transcribed_name"` (used as the transcription in `metadata.csv`). Example:
 
 ```json
 [
-  { "name": "كرفور ول أماه" },
-  { "name": "Restaurant petit à petit - مطعم بتي أ بتي" }
+  { "name": "كرفور ول أماه", "transcribed_name": "كرفور ول أماه" },
+  { "name": "Restaurant petit à petit - مطعم بتي أ بتي", "transcribed_name": "Restaurant petit à petit - مطعم بتي أ بتي" }
 ]
 ```
 
@@ -125,7 +136,8 @@ Only you add or edit entries; contributors only pick from this list when recordi
       style.css
       script.js
   dataset/
-    metadata.csv
+    metadata.csv      # filename, location, transcription
+    places_names.json
     Mosque_Central/
       Mosque_Central_001.wav
       ...

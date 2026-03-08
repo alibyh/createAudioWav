@@ -18,6 +18,7 @@ app = Flask(__name__)
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
 METADATA_PATH = DATASET_DIR / "metadata.csv"
 PLACES_PATH = DATASET_DIR / "places_names.json"
+METADATA_HEADER = ["filename", "location", "transcription"]
 MAX_UPLOAD_MB = 10
 
 # CORS: allow frontend on GitHub Pages (or any origin) to call this API
@@ -37,7 +38,7 @@ def ensure_dataset_structure():
     if not METADATA_PATH.exists():
         with open(METADATA_PATH, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["filename", "location"])
+            writer.writerow(METADATA_HEADER)
 
 
 def get_next_index(folder_path: Path, prefix: str) -> int:
@@ -59,11 +60,10 @@ def get_next_index(folder_path: Path, prefix: str) -> int:
 
 
 def ensure_wav_16k_mono_16bit(input_path: Path, output_path: Path) -> None:
-    """Convert audio file to WAV 16kHz mono 16-bit. Uses pydub if available."""
+    """Convert audio to WAV: 16000 Hz, mono, 16-bit PCM. Uses pydub if available."""
     try:
         from pydub import AudioSegment
     except ImportError:
-        # No pydub: if input is already WAV, copy; else raise
         import shutil
         if input_path.suffix.lower() == ".wav":
             shutil.copy2(input_path, output_path)
@@ -74,18 +74,20 @@ def ensure_wav_16k_mono_16bit(input_path: Path, output_path: Path) -> None:
         )
 
     sound = AudioSegment.from_file(str(input_path))
-    sound = sound.set_frame_rate(16000)
-    sound = sound.set_channels(1)
-    sound = sound.set_sample_width(2)  # 16-bit
+    sound = sound.set_frame_rate(16000)   # 16000 Hz
+    sound = sound.set_channels(1)         # mono
+    sound = sound.set_sample_width(2)     # 16-bit PCM
     sound.export(str(output_path), format="wav", parameters=["-ac", "1", "-ar", "16000"])
 
 
-def append_metadata(filename: str, location: str) -> None:
-    """Append one row to dataset/metadata.csv."""
+def append_metadata(filename: str, location: str, transcription: str = "") -> None:
+    """Append one row to dataset/metadata.csv (filename, location, transcription)."""
     ensure_dataset_structure()
+    if not transcription:
+        transcription = location
     with open(METADATA_PATH, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([filename, location])
+        writer.writerow([filename, location, transcription])
 
 
 def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -> Tuple[bool, str]:
@@ -165,10 +167,22 @@ def get_next_index_github(folder_name: str) -> int:
         return 1
 
 
-def push_metadata_line_to_github(filename: str, location: str) -> Tuple[bool, str]:
-    """Append a line to metadata.csv in the repo. Returns (success, error_message)."""
+def _csv_row_escaped(filename: str, location: str, transcription: str) -> str:
+    """Escape CSV fields and return a single line (with trailing newline)."""
+    def escape(s: str) -> str:
+        s = str(s)
+        if "\n" in s or "\r" in s or "," in s or '"' in s:
+            return '"' + s.replace('"', '""') + '"'
+        return s
+    return escape(filename) + "," + escape(location) + "," + escape(transcription) + "\n"
+
+
+def push_metadata_line_to_github(filename: str, location: str, transcription: str = "") -> Tuple[bool, str]:
+    """Append a line to metadata.csv in the repo (filename, location, transcription). Returns (success, error_message)."""
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return False, "GITHUB_REPO or GITHUB_TOKEN not set"
+    if not transcription:
+        transcription = location
     path_in_repo = "dataset/metadata.csv"
     try:
         import urllib.request
@@ -179,16 +193,18 @@ def push_metadata_line_to_github(filename: str, location: str) -> Tuple[bool, st
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
         req.add_header("Accept", "application/vnd.github+json")
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        header_line = ",".join(METADATA_HEADER) + "\n"
+        new_line = _csv_row_escaped(filename, location, transcription)
         try:
             with urllib.request.urlopen(req) as r:
                 existing = json.loads(r.read().decode("utf-8"))
                 current = base64.standard_b64decode(existing["content"]).decode("utf-8")
                 if not current.endswith("\n"):
                     current += "\n"
-                new_content = current + f"{filename},{location}\n"
+                new_content = current + new_line
         except HTTPError as e:
             if e.code == 404:
-                new_content = "filename,location\n" + f"{filename},{location}\n"
+                new_content = header_line + new_line
             else:
                 return False, f"GitHub API {e.code}: {e.reason}"
         return push_file_to_github(
@@ -217,20 +233,16 @@ def options_cors():
     return "", 204
 
 
-def load_places_names() -> list:
-    """Load list of place names from dataset/places_names.json (local or from GitHub)."""
+def _load_places_json() -> list:
+    """Load raw list of place dicts from dataset/places_names.json (local or GitHub)."""
     import json as json_mod
-    # Try local file first
     if PLACES_PATH.exists():
         try:
             with open(PLACES_PATH, "r", encoding="utf-8") as f:
                 data = json_mod.load(f)
-            if isinstance(data, list):
-                return [item.get("name", "").strip() for item in data if isinstance(item, dict) and item.get("name")]
-            return []
+            return data if isinstance(data, list) else []
         except Exception:
             return []
-    # Fallback: fetch from GitHub if configured
     if GITHUB_TOKEN and GITHUB_REPO:
         try:
             import urllib.request
@@ -243,11 +255,27 @@ def load_places_names() -> list:
                 obj = json_mod.loads(r.read().decode("utf-8"))
             content = base64.standard_b64decode(obj.get("content", "")).decode("utf-8")
             data = json_mod.loads(content)
-            if isinstance(data, list):
-                return [item.get("name", "").strip() for item in data if isinstance(item, dict) and item.get("name")]
+            return data if isinstance(data, list) else []
         except Exception:
             pass
     return []
+
+
+def load_places_names() -> list:
+    """Load list of place names for the dropdown."""
+    data = _load_places_json()
+    return [item.get("name", "").strip() for item in data if isinstance(item, dict) and item.get("name")]
+
+
+def get_transcription_for_location(location: str) -> str:
+    """Get transcribed_name for a place from places_names.json; fallback to location."""
+    data = _load_places_json()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        if (item.get("name") or "").strip() == location.strip():
+            return (item.get("transcribed_name") or item.get("name") or location).strip()
+    return location.strip()
 
 
 @app.route("/")
@@ -358,7 +386,8 @@ def upload_recording():
             if temp_path.exists():
                 temp_path.unlink(missing_ok=True)
 
-        append_metadata(filename, location)
+        transcription = get_transcription_for_location(location)
+        append_metadata(filename, location, transcription)
         saved.append(filename)
 
         if GITHUB_REPO and output_path.exists():
@@ -373,7 +402,7 @@ def upload_recording():
                 github_ok = False
                 github_err = err1
             elif ok1:
-                ok2, err2 = push_metadata_line_to_github(filename, location)
+                ok2, err2 = push_metadata_line_to_github(filename, location, transcription)
                 if not ok2 and github_ok:
                     github_ok = False
                     github_err = err2

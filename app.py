@@ -16,6 +16,7 @@ app = Flask(__name__)
 
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
 METADATA_PATH = DATASET_DIR / "metadata.csv"
+PLACES_PATH = DATASET_DIR / "places_names.json"
 MAX_UPLOAD_MB = 10
 
 # CORS: allow frontend on GitHub Pages (or any origin) to call this API
@@ -213,9 +214,49 @@ def options_cors():
     return "", 204
 
 
+def load_places_names() -> list:
+    """Load list of place names from dataset/places_names.json (local or from GitHub)."""
+    import json as json_mod
+    # Try local file first
+    if PLACES_PATH.exists():
+        try:
+            with open(PLACES_PATH, "r", encoding="utf-8") as f:
+                data = json_mod.load(f)
+            if isinstance(data, list):
+                return [item.get("name", "").strip() for item in data if isinstance(item, dict) and item.get("name")]
+            return []
+        except Exception:
+            return []
+    # Fallback: fetch from GitHub if configured
+    if GITHUB_TOKEN and GITHUB_REPO:
+        try:
+            import urllib.request
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/places_names.json"
+            req = urllib.request.Request(url, method="GET")
+            req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+            req.add_header("Accept", "application/vnd.github+json")
+            req.add_header("X-GitHub-Api-Version", "2022-11-28")
+            with urllib.request.urlopen(req) as r:
+                obj = json_mod.loads(r.read().decode())
+            content = base64.standard_b64decode(obj.get("content", "")).decode("utf-8")
+            data = json_mod.loads(content)
+            if isinstance(data, list):
+                return [item.get("name", "").strip() for item in data if isinstance(item, dict) and item.get("name")]
+        except Exception:
+            pass
+    return []
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/places", methods=["GET"])
+def get_places():
+    """Return list of place names for the dropdown (from dataset/places_names.json)."""
+    places = load_places_names()
+    return jsonify({"places": places})
 
 
 def get_recording_count_github(folder_name: str) -> int:

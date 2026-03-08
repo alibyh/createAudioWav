@@ -87,9 +87,22 @@ Anyone visiting that URL can record and click **Save All**; recordings go to you
 
 ## Usage
 
-1. Enter a **location name** (e.g. "Mosque Central", "Hospital A"). Spaces become underscores in folder names.
+1. **Choose a place** from the dropdown (list comes from `dataset/places_names.json`). Only you (the repo owner) edit that file so place names stay consistent.
 2. Click **Start Recording**, speak the place name (about 2–5 seconds), then **Stop Recording**. You can record up to 5 clips.
 3. Click **Save All** to upload. Files are converted to WAV and saved as `dataset/<Location>_<NNN>.wav` and appended to `dataset/metadata.csv`.
+
+### Place list (`dataset/places_names.json`)
+
+JSON array of objects with a `"name"` field. Example:
+
+```json
+[
+  { "name": "كرفور ول أماه" },
+  { "name": "Restaurant petit à petit - مطعم بتي أ بتي" }
+]
+```
+
+Only you add or edit entries; contributors only pick from this list when recording.
 
 ---
 

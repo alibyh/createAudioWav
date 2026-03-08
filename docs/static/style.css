@@ -92,6 +92,25 @@ header h1 {
     color: var(--text-muted);
 }
 
+.location-select,
+select#location-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    appearance: auto;
+}
+.location-select:focus,
+select#location-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 .hint {
     font-size: 0.8rem;
     color: var(--text-muted);

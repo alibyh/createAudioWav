@@ -12,7 +12,7 @@
         return path;
     }
 
-    const locationInput = document.getElementById("location-input");
+    const locationSelect = document.getElementById("location-input");
     const currentLocationEl = document.getElementById("current-location");
     const recordingStatusEl = document.getElementById("recording-status");
     const recordingCountEl = document.getElementById("recording-count");
@@ -55,12 +55,12 @@
     }
 
     function updateCurrentLocation() {
-        const loc = locationInput.value.trim();
+        const loc = (locationSelect.value || "").trim();
         currentLocationEl.textContent = loc || "—";
     }
 
     function updateRecordingCount() {
-        const folder = locationToFolderName(locationInput.value);
+        const folder = locationToFolderName(locationSelect.value || "");
         if (!folder) {
             recordingCountEl.textContent = "0";
             return;
@@ -85,20 +85,39 @@
         btnStart.disabled = n >= MAX_PENDING;
     }
 
-    locationInput.addEventListener("input", function () {
+    locationSelect.addEventListener("change", function () {
         updateCurrentLocation();
         updateRecordingCount();
     });
-    locationInput.addEventListener("blur", updateRecordingCount);
+
+    function loadPlaces() {
+        fetch(apiUrl("/api/places"))
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                const places = data.places || [];
+                while (locationSelect.options.length > 1) locationSelect.remove(1);
+                places.forEach(function (name) {
+                    var opt = document.createElement("option");
+                    opt.value = name;
+                    opt.textContent = name;
+                    locationSelect.appendChild(opt);
+                });
+                updateCurrentLocation();
+                updateRecordingCount();
+            })
+            .catch(function () {
+                showMessage("Could not load place list.", "error");
+            });
+    }
 
     function requestMicrophone() {
         return navigator.mediaDevices.getUserMedia({ audio: true });
     }
 
     function startRecording() {
-        const location = locationInput.value.trim();
+        const location = (locationSelect.value || "").trim();
         if (!location) {
-            showMessage("Enter a location name before recording.", "error");
+            showMessage("Choose a place before recording.", "error");
             return;
         }
         if (pendingRecordings.length >= MAX_PENDING) {
@@ -154,9 +173,9 @@
     }
 
     function saveRecording() {
-        const location = locationInput.value.trim();
+        const location = (locationSelect.value || "").trim();
         if (!location) {
-            showMessage("Enter a location name before saving.", "error");
+            showMessage("Choose a place before saving.", "error");
             return;
         }
         if (pendingRecordings.length === 0) {
@@ -211,6 +230,7 @@
     btnStop.addEventListener("click", stopRecording);
     btnSave.addEventListener("click", saveRecording);
 
+    loadPlaces();
     updateCurrentLocation();
     updateRecordingCount();
     updatePendingUI();

@@ -14,14 +14,11 @@
         </header>
 
         <section class="location-section card">
-            <label for="location-input">Location name</label>
-            <input
-                type="text"
-                id="location-input"
-                placeholder="e.g. Mosque Central, Hospital A, Library West"
-                autocomplete="off"
-            >
-            <p class="hint">Spaces are stored as underscores (e.g. Mosque Central → Mosque_Central)</p>
+            <label for="location-input">Choose a place</label>
+            <select id="location-input" class="location-select">
+                <option value="">Choose a place…</option>
+            </select>
+            <p class="hint">Place list is maintained by the dataset owner. Recordings are stored under the selected name.</p>
         </section>
 
         <section class="status-section card">

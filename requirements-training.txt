@@ -1,0 +1,4 @@
+# Install after requirements.txt for the recording app.
+# Usage: pip install -r requirements.txt -r requirements-training.txt
+torch>=2.0.0
+torchaudio>=2.0.0

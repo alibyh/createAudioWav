@@ -210,6 +210,7 @@ def add_cors_headers(response):
 
 @app.route("/api/upload", methods=["OPTIONS"])
 @app.route("/api/recordings/count", methods=["OPTIONS"])
+@app.route("/api/places", methods=["OPTIONS"])
 def options_cors():
     return "", 204
 

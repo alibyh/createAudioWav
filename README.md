@@ -75,6 +75,14 @@ Goal: **Frontend** on GitHub Pages; **backend** on Render. Everyone who hits “
 
 Anyone visiting that URL can record and click **Save All**; recordings go to your Render backend and, if **GITHUB_REPO** and **GITHUB_TOKEN** are set, are stored in this repo under `dataset/`.
 
+### Where are my files?
+
+- **If you did not set GITHUB_REPO and GITHUB_TOKEN on Render:** The backend only writes to its own disk. On Render’s free tier that disk is **ephemeral** (wiped on sleep/restart), so files disappear. You’ll see “Saved” but they won’t appear on GitHub or anywhere persistent.
+- **To have files in your GitHub repo:** In the Render dashboard for your service, go to **Environment** and add:
+  - **GITHUB_REPO** = `YOUR_USERNAME/YOUR_REPO_NAME` (the repo that contains this project).
+  - **GITHUB_TOKEN** = a [Personal Access Token](https://github.com/settings/tokens) with **repo** scope.
+- After saving again, files appear in the repo under **dataset/** → **dataset/\<LocationName\>/\<file\>.wav** and **dataset/metadata.csv**. If something goes wrong, the app now shows the reason (e.g. “GITHUB_REPO not set” or the GitHub API error) under the success message.
+
 ---
 
 ## Usage

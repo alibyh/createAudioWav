@@ -188,7 +188,16 @@
                     pendingRecordings = [];
                     updatePendingUI();
                     updateRecordingCount();
-                    showMessage("Saved " + saved.length + " file(s): " + (saved.join(", ")) + ".", "success");
+                    var msg = "Saved " + saved.length + " file(s): " + (saved.join(", ")) + ".";
+                    if (result.data.github_error) {
+                        msg += " " + result.data.github_error;
+                        showMessage(msg, "error");
+                    } else if (result.data.pushed_to_github) {
+                        msg += " Synced to GitHub.";
+                        showMessage(msg, "success");
+                    } else {
+                        showMessage(msg, "success");
+                    }
                 } else {
                     showMessage(result.data.error || "Upload failed.", "error");
                 }

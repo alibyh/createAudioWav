@@ -8,6 +8,7 @@ import base64
 import csv
 import os
 from pathlib import Path
+from typing import Tuple
 
 from flask import Flask, request, jsonify, render_template
 
@@ -85,16 +86,16 @@ def append_metadata(filename: str, location: str) -> None:
         writer.writerow([filename, location])
 
 
-def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -> bool:
-    """Create or update a file in the GitHub repo. Returns True on success."""
+def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -> Tuple[bool, str]:
+    """Create or update a file in the GitHub repo. Returns (success, error_message)."""
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        return False
+        return False, "GITHUB_REPO or GITHUB_TOKEN not set on server"
     try:
         import urllib.request
         import json
+        from urllib.error import HTTPError
         url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
         b64 = base64.standard_b64encode(content_bytes).decode("ascii")
-        # Check if file exists to get sha for update
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
         req.add_header("Accept", "application/vnd.github+json")
@@ -103,9 +104,9 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
             with urllib.request.urlopen(req) as r:
                 existing = json.loads(r.read().decode())
                 sha = existing.get("sha")
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             if e.code != 404:
-                return False
+                return False, f"GitHub API {e.code}: {e.reason}"
             sha = None
         payload = {"message": message, "content": b64}
         if sha is not None:
@@ -117,9 +118,12 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req):
-            return True
-    except Exception:
-        return False
+            return True, ""
+    except HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        return False, f"GitHub API {e.code}: {body[:200] if body else e.reason}"
+    except Exception as e:
+        return False, str(e)
 
 
 def get_next_index_github(folder_name: str) -> int:
@@ -158,14 +162,15 @@ def get_next_index_github(folder_name: str) -> int:
         return 1
 
 
-def push_metadata_line_to_github(filename: str, location: str) -> bool:
-    """Append a line to metadata.csv in the repo (read current content, append, push)."""
+def push_metadata_line_to_github(filename: str, location: str) -> Tuple[bool, str]:
+    """Append a line to metadata.csv in the repo. Returns (success, error_message)."""
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        return False
+        return False, "GITHUB_REPO or GITHUB_TOKEN not set"
     path_in_repo = "dataset/metadata.csv"
     try:
         import urllib.request
         import json
+        from urllib.error import HTTPError
         url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
@@ -178,18 +183,18 @@ def push_metadata_line_to_github(filename: str, location: str) -> bool:
                 if not current.endswith("\n"):
                     current += "\n"
                 new_content = current + f"{filename},{location}\n"
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             if e.code == 404:
                 new_content = "filename,location\n" + f"{filename},{location}\n"
             else:
-                return False
+                return False, f"GitHub API {e.code}: {e.reason}"
         return push_file_to_github(
             path_in_repo,
             new_content.encode("utf-8"),
             f"Add recording: {filename}",
         )
-    except Exception:
-        return False
+    except Exception as e:
+        return False, str(e)
 
 
 @app.after_request
@@ -287,6 +292,8 @@ def upload_recording():
     else:
         next_index = get_next_index(folder_path, folder_name)
     saved = []
+    github_ok = True
+    github_err = None
 
     for audio_file in audio_files:
         filename = f"{folder_name}_{next_index:03d}.wav"
@@ -313,21 +320,34 @@ def upload_recording():
         if GITHUB_REPO and output_path.exists():
             with open(output_path, "rb") as f:
                 wav_bytes = f.read()
-            push_file_to_github(
+            ok1, err1 = push_file_to_github(
                 f"dataset/{folder_name}/{filename}",
                 wav_bytes,
                 f"Add recording: {filename}",
             )
-            push_metadata_line_to_github(filename, location)
+            if not ok1 and github_ok:
+                github_ok = False
+                github_err = err1
+            elif ok1:
+                ok2, err2 = push_metadata_line_to_github(filename, location)
+                if not ok2 and github_ok:
+                    github_ok = False
+                    github_err = err2
+        elif not GITHUB_REPO and github_err is None:
+            github_err = "Server has no GITHUB_REPO set. Files are only on the server (lost on restart/sleep). Add GITHUB_REPO and GITHUB_TOKEN in Render env to save to your repo."
 
         next_index += 1
 
-    return jsonify({
+    payload = {
         "ok": True,
         "saved": saved,
         "location": location,
         "count": next_index - 1,
-    })
+        "pushed_to_github": github_ok and bool(GITHUB_REPO),
+    }
+    if github_err:
+        payload["github_error"] = github_err
+    return jsonify(payload)
 
 
 def check_pydub():

@@ -9,6 +9,7 @@ import csv
 import os
 from pathlib import Path
 from typing import Tuple
+from urllib.parse import quote
 
 from flask import Flask, request, jsonify, render_template
 
@@ -95,7 +96,8 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
         import urllib.request
         import json
         from urllib.error import HTTPError
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
+        # Percent-encode path for URLs (handles Arabic and other non-ASCII)
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{quote(path_in_repo, safe='/')}"
         b64 = base64.standard_b64encode(content_bytes).decode("ascii")
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
@@ -103,7 +105,7 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         try:
             with urllib.request.urlopen(req) as r:
-                existing = json.loads(r.read().decode())
+                existing = json.loads(r.read().decode("utf-8"))
                 sha = existing.get("sha")
         except HTTPError as e:
             if e.code != 404:
@@ -112,7 +114,7 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
         payload = {"message": message, "content": b64}
         if sha is not None:
             payload["sha"] = sha
-        data = json.dumps(payload).encode()
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="PUT")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
         req.add_header("Accept", "application/vnd.github+json")
@@ -121,7 +123,7 @@ def push_file_to_github(path_in_repo: str, content_bytes: bytes, message: str) -
         with urllib.request.urlopen(req):
             return True, ""
     except HTTPError as e:
-        body = e.read().decode() if e.fp else ""
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
         return False, f"GitHub API {e.code}: {body[:200] if body else e.reason}"
     except Exception as e:
         return False, str(e)
@@ -135,13 +137,13 @@ def get_next_index_github(folder_name: str) -> int:
         import urllib.request
         import json
         from urllib.error import HTTPError
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{folder_name}"
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{quote(folder_name, safe='')}"
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
         req.add_header("Accept", "application/vnd.github+json")
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         with urllib.request.urlopen(req) as r:
-            items = json.loads(r.read().decode())
+            items = json.loads(r.read().decode("utf-8"))
         indices = []
         prefix = f"{folder_name}_"
         for item in items:
@@ -179,7 +181,7 @@ def push_metadata_line_to_github(filename: str, location: str) -> Tuple[bool, st
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         try:
             with urllib.request.urlopen(req) as r:
-                existing = json.loads(r.read().decode())
+                existing = json.loads(r.read().decode("utf-8"))
                 current = base64.standard_b64decode(existing["content"]).decode("utf-8")
                 if not current.endswith("\n"):
                     current += "\n"
@@ -238,7 +240,7 @@ def load_places_names() -> list:
             req.add_header("Accept", "application/vnd.github+json")
             req.add_header("X-GitHub-Api-Version", "2022-11-28")
             with urllib.request.urlopen(req) as r:
-                obj = json_mod.loads(r.read().decode())
+                obj = json_mod.loads(r.read().decode("utf-8"))
             content = base64.standard_b64decode(obj.get("content", "")).decode("utf-8")
             data = json_mod.loads(content)
             if isinstance(data, list):
@@ -268,13 +270,13 @@ def get_recording_count_github(folder_name: str) -> int:
         import urllib.request
         import json
         from urllib.error import HTTPError
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{folder_name}"
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/dataset/{quote(folder_name, safe='')}"
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
         req.add_header("Accept", "application/vnd.github+json")
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         with urllib.request.urlopen(req) as r:
-            items = json.loads(r.read().decode())
+            items = json.loads(r.read().decode("utf-8"))
         return sum(1 for i in items if i.get("type") == "file" and (i.get("name") or "").endswith(".wav"))
     except HTTPError as e:
         if e.code == 404:

@@ -3,11 +3,13 @@ Quick check that the dataset loads and mel spectrograms have the expected shape.
 Run from project root: python training/check_dataset.py
 """
 
+import sys
 from pathlib import Path
 
-# Project root = parent of training/
+# Project root = parent of training/ (so "training" package can be imported)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASET_DIR = PROJECT_ROOT / "dataset"
+sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def main():

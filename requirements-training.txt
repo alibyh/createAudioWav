@@ -1,4 +1,6 @@
 # Install after requirements.txt for the recording app.
 # Usage: pip install -r requirements.txt -r requirements-training.txt
+# PyTorch 2.2 is built for NumPy 1.x; NumPy 2.x can cause import errors.
+numpy>=1.20.0,<2
 torch>=2.0.0
 torchaudio>=2.0.0

@@ -26,6 +26,22 @@ python training/check_dataset.py
 
 Prints number of samples, classes, label list, and shape of one mel spectrogram.
 
-## Next step
+## Train
 
-Add `train.py`: build a small CNN (e.g. Conv2D → ReLU → MaxPool → … → Dense → Softmax), train with cross-entropy and Adam, save the model and use `training/labels.json` for inference.
+```bash
+python training/train.py [--epochs 30] [--batch_size 16] [--lr 0.001]
+```
+
+Saves the best checkpoint to `training/checkpoints/best.pt` (and updates `training/labels.json` from the dataset).
+
+## Inference
+
+Predict the place name from a single WAV file:
+
+```bash
+python training/inference.py path/to/recording.wav
+```
+
+Optionally specify a checkpoint: `python training/inference.py recording.wav --checkpoint training/checkpoints/best.pt`
+
+**Note:** Paths are resolved from the project root. If your WAVs are only on GitHub (from the recording app), clone or pull the repo so `dataset/<Place_Name>/*.wav` exists locally, or run inference with an absolute path to a WAV file on your machine.

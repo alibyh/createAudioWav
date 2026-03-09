@@ -31,6 +31,32 @@ You can run it **locally** or deploy **frontend on GitHub Pages** and **backend 
 
 4. Open **http://127.0.0.1:5001** in a modern browser (Chrome/Firefox/Edge). Allow microphone access when prompted.
 
+### Using the prediction API (`/api/predict`) locally
+
+PyTorch does not support Python 3.13. To run the app **with** the trained-model prediction endpoint:
+
+1. Create a separate venv with Python 3.10–3.12 (e.g. `python3.11 -m venv venv_train`).
+2. Activate it: `source venv_train/bin/activate`.
+3. Install both dependency sets: `pip install -r requirements.txt -r requirements-training.txt`.
+4. Run `python app.py`. Prediction will work if `training/checkpoints/best.pt` exists.
+
+Use the main `venv` (Python 3.13) for recording-only; use `venv_train` when you need `/api/predict`.
+
+### Evaluate model quality (per-class + confusion matrix)
+
+After training, you can inspect where the model is confusing places:
+
+```bash
+source venv_train/bin/activate
+python training/evaluate.py --split val
+```
+
+Evaluate on all available samples:
+
+```bash
+python training/evaluate.py --split full
+```
+
 ---
 
 ## Deploy for everyone (GitHub Pages + shared dataset)

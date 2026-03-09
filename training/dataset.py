@@ -5,6 +5,7 @@ Loads WAVs from dataset/, converts to mel spectrograms, and returns (spectrogram
 
 import csv
 import json
+import random
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
@@ -80,6 +81,8 @@ class PlaceNameDataset(Dataset):
             n_fft=n_fft,
             hop_length=hop_length,
             n_mels=n_mels,
+            center=False,
+            power=2.0,
         )
 
         # Build list of (filepath, label_index), skipping missing files and duplicates
@@ -134,6 +137,16 @@ class PlaceNameDataset(Dataset):
             waveform = torch.cat([waveform, padding], dim=1)
         mel = self.mel_spec(waveform)
         mel = mel.squeeze(0)
+        # Convert to log-mel scale and normalize per sample for more stable training.
+        mel = torchaudio.functional.amplitude_to_DB(
+            mel,
+            multiplier=10.0,
+            amin=1e-10,
+            db_multiplier=0.0,
+            top_db=80.0,
+        )
+        mel_std = mel.std().clamp_min(1e-6)
+        mel = (mel - mel.mean()) / mel_std
         return mel, label
 
 
@@ -148,14 +161,31 @@ def get_dataloaders(
     """
     Build train and validation DataLoaders with an 80/20 split.
     """
-    from torch.utils.data import DataLoader, random_split
+    from torch.utils.data import DataLoader, Subset
 
     full = PlaceNameDataset(dataset_dir, **dataset_kwargs)
     n = len(full)
-    n_val = max(0, int(n * val_ratio))
-    n_train = n - n_val
-    gen = torch.Generator().manual_seed(seed)
-    train_ds, val_ds = random_split(full, [n_train, n_val], generator=gen)
+    rng = random.Random(seed)
+    by_label: Dict[int, List[int]] = {}
+    for idx, (_, label) in enumerate(full.samples):
+        by_label.setdefault(label, []).append(idx)
+
+    train_indices: List[int] = []
+    val_indices: List[int] = []
+    for indices in by_label.values():
+        rng.shuffle(indices)
+        if len(indices) <= 1:
+            train_indices.extend(indices)
+            continue
+        n_val_cls = max(1, int(len(indices) * val_ratio))
+        n_val_cls = min(n_val_cls, len(indices) - 1)  # keep at least 1 sample for train
+        val_indices.extend(indices[:n_val_cls])
+        train_indices.extend(indices[n_val_cls:])
+
+    rng.shuffle(train_indices)
+    rng.shuffle(val_indices)
+    train_ds = Subset(full, train_indices)
+    val_ds = Subset(full, val_indices)
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,

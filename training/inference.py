@@ -25,6 +25,8 @@ def wav_to_mel(wav_path: Path, target_length_sec: float = 5.0) -> torch.Tensor:
         n_fft=N_FFT,
         hop_length=HOP_LENGTH,
         n_mels=N_MELS,
+        center=False,
+        power=2.0,
     )
     waveform, sr = torchaudio.load(str(wav_path))
     if waveform.shape[0] > 1:
@@ -38,6 +40,15 @@ def wav_to_mel(wav_path: Path, target_length_sec: float = 5.0) -> torch.Tensor:
         padding = torch.zeros(1, target_samples - n)
         waveform = torch.cat([waveform, padding], dim=1)
     mel = mel_spec(waveform).squeeze(0)
+    mel = torchaudio.functional.amplitude_to_DB(
+        mel,
+        multiplier=10.0,
+        amin=1e-10,
+        db_multiplier=0.0,
+        top_db=80.0,
+    )
+    mel_std = mel.std().clamp_min(1e-6)
+    mel = (mel - mel.mean()) / mel_std
     return mel
 
 

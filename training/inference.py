@@ -41,6 +41,47 @@ def wav_to_mel(wav_path: Path, target_length_sec: float = 5.0) -> torch.Tensor:
     return mel
 
 
+def run_inference(wav_path, checkpoint_path=None):
+    """
+    Run the trained model on a WAV file. Returns {"place": str, "confidence": float}
+    or {"place": None, "error": str}. Can be called from the Flask app.
+    """
+    wav_path = Path(wav_path)
+    if not wav_path.exists():
+        return {"place": None, "error": "File not found"}
+    if checkpoint_path is None:
+        checkpoint_path = PROJECT_ROOT / "training" / "checkpoints" / "best.pt"
+    if not checkpoint_path.exists():
+        return {"place": None, "error": "Model checkpoint not found. Train first."}
+    try:
+        ckpt = torch.load(checkpoint_path, map_location="cpu")
+    except Exception as e:
+        return {"place": None, "error": f"Failed to load checkpoint: {e}"}
+    state_dict = ckpt["state_dict"]
+    n_classes = ckpt["n_classes"]
+    ordered_labels = ckpt.get("ordered_labels")
+    if ordered_labels is None:
+        labels_path = PROJECT_ROOT / "training" / "labels.json"
+        if labels_path.exists():
+            with open(labels_path, "r", encoding="utf-8") as f:
+                mapping = json.load(f)
+            ordered_labels = [mapping[str(i)] for i in range(n_classes)]
+        else:
+            ordered_labels = [str(i) for i in range(n_classes)]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = PlaceCNN(n_classes=n_classes).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    mel = wav_to_mel(wav_path).unsqueeze(0).to(device)
+    with torch.no_grad():
+        logits = model(mel)
+        probs = torch.softmax(logits, dim=1)
+        pred = logits.argmax(dim=1).item()
+    place_name = ordered_labels[pred]
+    confidence = probs[0, pred].item()
+    return {"place": place_name, "confidence": confidence}
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python training/inference.py <path/to/audio.wav> [--checkpoint training/checkpoints/best.pt]")

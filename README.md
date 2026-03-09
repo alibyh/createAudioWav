@@ -29,7 +29,7 @@ You can run it **locally** or deploy **frontend on GitHub Pages** and **backend 
    python app.py
    ```
 
-4. Open **http://127.0.0.1:5000** in a modern browser (Chrome/Firefox/Edge). Allow microphone access when prompted.
+4. Open **http://127.0.0.1:5001** in a modern browser (Chrome/Firefox/Edge). Allow microphone access when prompted.
 
 ---
 

@@ -7,6 +7,7 @@ Supports CORS for GitHub Pages; optional push to GitHub repo for persistent shar
 import base64
 import csv
 import os
+import sys
 from pathlib import Path
 from typing import Tuple
 from urllib.parse import quote
@@ -25,6 +26,15 @@ MAX_UPLOAD_MB = 10
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "username/repo-name"
+
+# Optional: prediction via trained model (requires torch + training package)
+_PROJECT_ROOT = Path(__file__).resolve().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+try:
+    from training.inference import run_inference as _run_inference
+except ImportError:
+    _run_inference = None  # torch/training not installed; /api/predict returns 503
 
 
 def location_to_folder_name(location: str) -> str:
@@ -229,6 +239,7 @@ def add_cors_headers(response):
 @app.route("/api/upload", methods=["OPTIONS"])
 @app.route("/api/recordings/count", methods=["OPTIONS"])
 @app.route("/api/places", methods=["OPTIONS"])
+@app.route("/api/predict", methods=["OPTIONS"])
 def options_cors():
     return "", 204
 
@@ -423,6 +434,38 @@ def upload_recording():
     return jsonify(payload)
 
 
+@app.route("/api/predict", methods=["POST"])
+def predict_place():
+    """
+    Accept an audio file (e.g. WebM from browser), convert to WAV if needed,
+    run the trained place-name model, return {"place": str, "confidence": float} or {"place": None, "error": str}.
+    """
+    if _run_inference is None:
+        return jsonify({"place": None, "error": "Prediction not available (torch/training not installed)"}), 503
+    if "audio" not in request.files:
+        return jsonify({"place": None, "error": "No audio file"}), 400
+    audio_file = request.files["audio"]
+    if not audio_file.filename:
+        return jsonify({"place": None, "error": "No audio file"}), 400
+    ext = (Path(audio_file.filename).suffix or ".webm").lower()
+    if ext not in (".wav", ".webm", ".ogg", ".mp3", ".m4a"):
+        ext = ".webm"
+    upload_path = DATASET_DIR / f"_temp_predict_upload{ext}"
+    wav_path = DATASET_DIR / "_temp_predict.wav"
+    try:
+        audio_file.save(str(upload_path))
+        ensure_wav_16k_mono_16bit(upload_path, wav_path)
+        result = _run_inference(wav_path)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"place": None, "error": str(e)}), 500
+    finally:
+        if upload_path.exists():
+            upload_path.unlink(missing_ok=True)
+        if wav_path.exists():
+            wav_path.unlink(missing_ok=True)
+
+
 def check_pydub():
     """Fail fast with a clear message if pydub is not installed (e.g. wrong venv)."""
     try:
@@ -441,6 +484,7 @@ def check_pydub():
 if __name__ == "__main__":
     check_pydub()
     ensure_dataset_structure()
-    port = int(os.environ.get("PORT", 5000))
+    # Default 5001: macOS often uses 5000 for AirPlay Receiver
+    port = int(os.environ.get("PORT", 5001))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
     app.run(host="0.0.0.0", debug=debug, port=port)

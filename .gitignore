@@ -1,0 +1,22 @@
+# Virtual environments
+venv/
+venv_train/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / OS
+.idea/
+.DS_Store
+*.swp
+*.swo
